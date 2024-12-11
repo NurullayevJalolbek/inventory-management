@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ProductionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -8,6 +9,6 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 
-Route::post('/nimadir', function (Request $request) {
-    return $request->all();
-});
+Route::post('/products/produce', [ProductionController::class, 'produce']);
+
+
