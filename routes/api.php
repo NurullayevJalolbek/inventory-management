@@ -9,6 +9,17 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 
+/*
+ * Request body:
+ * {
+   "products":[
+
+    {"id":1, "qty":30},
+    {"id":2, "qty":20}
+   ]
+}
+ */
+
 Route::post('/products/produce', [ProductionController::class, 'produce']);
 
 

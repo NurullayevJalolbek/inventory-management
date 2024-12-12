@@ -12,61 +12,84 @@ class ProductionController extends Controller
 {
     public function produce(Request $request): \Illuminate\Http\JsonResponse
     {
-        $result = array();
+        $result = []; // Umumiy Natija uchun
+
+        $MaterialBusy = []; // Band qilingan Xomashyolar uchun
 
         $products = $request->input("products");
+        $productIds = array_column($products, "id");
+        $productQty = array_column($products, "qty");
 
-        $ProductIds = array_column($products, "id");
-        $ProductQty = array_column($products, "qty");
 
-        foreach ($ProductIds as $Index => $ProductId) {
-            $Product = Product::with('materials')->find($ProductId);
+        foreach ($productIds as $index => $productId) {
+            $product = Product::with('materials')->find($productId);
 
-            $ProductMaterials = array();
-            foreach ($Product->materials as $Material) {
-                $MaterialId = $Material->id;
-                $MaterialName = $Material->name;
-                $MaterialQty = $Material->pivot->quantity;
-                $MaterialQty = $MaterialQty * $ProductQty[$Index];
-                $CommonQuantity = $MaterialQty;
+            $productMaterials = []; // Maxsulot Xomashyolari uchun
 
-                $WAREHOUSE = Werehouse::where("material_id", $MaterialId)->get();
+            foreach ($product->materials as $material) {
+                $materialId = $material->id;
+                $materialName = $material->name;
+                $requiredQty = $material->pivot->quantity * $productQty[$index];
 
-                foreach ($WAREHOUSE as $WareHouse) {
+                $commonQuantity = $requiredQty;
+                $warehouses = Werehouse::where("material_id", $materialId)->get();
 
-                    $RemainQuantity = $WareHouse->remainder;
+                foreach ($warehouses as $warehouse) {
 
-                    if ($CommonQuantity > 0) {
-                        $QuantityTake = min($RemainQuantity, $CommonQuantity);
-                        $ProductMaterials [] = [
-                            "warehouse_id" => $WareHouse->id,
-                            "material_name" => $MaterialName,
-                            "quantity" => $QuantityTake,
-                            "price" => $WareHouse->price
+                    // Omborda band qilingan materialni oladi  agar mavjud bolmasa = 0
+                    $alreadyReserved = $MaterialBusy[$materialId][$warehouse->id] ?? 0;
+
+                    //Ombordagi  mavjud  xomashyoni oldin band qilganidan ayiradi
+                    $remainWarehouse = $warehouse->remainder - $alreadyReserved;
+
+
+                    if ($remainWarehouse > 0) {
+                        $quantityTake = min($remainWarehouse, $commonQuantity);
+
+                        // Xomashyo malumotlarini saqlash
+                        $productMaterials[] = [
+                            "warehouse_id" => $warehouse->id,
+                            "material_name" => $materialName,
+                            "quantity" => $quantityTake,
+                            "price" => $warehouse->price
                         ];
-                        $CommonQuantity = $CommonQuantity - $QuantityTake;
+
+                        /*
+                         * Band qilingan Xomashyoni yangilash
+                         * Omborda  band qilingan miqdor  mavjud bolmasa uni  = 0
+                         */
+                        if (!isset($MaterialBusy[$materialId][$warehouse->id])) {
+                            $MaterialBusy[$materialId][$warehouse->id] = 0;
+                        }
+                        $MaterialBusy[$materialId][$warehouse->id] += $quantityTake;
+
+
+                        $commonQuantity -= $quantityTake;
+
+
+                        if ($commonQuantity <= 0) {
+                            break;
+                        }
+
                     }
                 }
 
-                if ($CommonQuantity > 0) {
-                    $ProductMaterials [] = [
+                // Omborda yetarlicha Xomashyolar bo'lmasa
+                if ($commonQuantity > 0) {
+                    $productMaterials[] = [
                         "warehouse_id" => null,
-                        "material_name" => $MaterialName,
-                        "quantity" => $CommonQuantity,
+                        "material_name" => $materialName,
+                        "quantity" => $commonQuantity,
                         "price" => null
                     ];
                 }
             }
-
-            $result [] = [
-                "product_name" => $Product->name,
-                "product_qty" => $ProductQty[$Index],
-                "product_materials" => $ProductMaterials
+            $result[] = [
+                "product_name" => $product->name,
+                "product_qty" => $productQty[$index],
+                "product_materials" => $productMaterials
             ];
-
-
         }
         return response()->json($result);
     }
-
 }
